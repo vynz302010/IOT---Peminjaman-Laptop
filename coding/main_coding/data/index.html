@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Management</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #f0f0f0;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 20px;
+      color: #00bcd4;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+      background: #1e1e1e;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      border: 1px solid #444;
+      background-color: #2a2a2a;
+      color: #f0f0f0;
+      box-sizing: border-box;
+    }
+    input[type="text"]::placeholder {
+      color: #aaa;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 5px;
+      border: none;
+      background-color: #00bcd4;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0097a7;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: #1e1e1e;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #333;
+      text-align: center;
+    }
+    th {
+      background-color: #00bcd4;
+      color: #fff;
+    }
+    tr:nth-child(even) {
+      background-color: #2a2a2a;
+    }
+    tr:hover {
+      background-color: #333;
+    }
+    #loadMoreBtn {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Data Management</h1>
+  <button type="button" onclick="resetWiFi()">♻️ Reset WiFi</button>
+  <button type="button" onclick="scanRFID()">🔍 Scan RFID</button>
+
+  <form id="dataForm">
+    <input type="text" id="name" placeholder="Nama" required>
+    <input type="text" id="kelas" placeholder="Kelas" required>
+    <input type="text" id="uid" placeholder="UID" required>
+    <button type="submit">💾 Save</button>
+  </form>
+
+  <div id="dataDisplay">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Kelas</th>
+          <th>UID</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  
+  <button type="button" id="loadMoreBtn" onclick="loadMoreData()">⬇️ Load More</button>
+
+  <script>
+    let offset = 0;
+    const limit = 5;
+
+    document.getElementById("dataForm").addEventListener("submit", function(event) {
+      event.preventDefault();
+      const name = document.getElementById("name").value;
+      const kelas = document.getElementById("kelas").value;
+      const uid = document.getElementById("uid").value;
+
+      const formData = new URLSearchParams();
+      formData.append("name", name);
+      formData.append("kelas", kelas);
+      formData.append("uid", uid);
+
+      fetch("/save", {
+        method: "POST",
+        body: formData,
+        headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      })
+      .then(response => response.text())
+      .then(data => {
+        console.log(data);
+        offset = 0;
+        document.getElementById("tableBody").innerHTML = "";
+        loadMoreData();
+      })
+      .catch(error => console.error("Error:", error));
+    });
+
+    function loadMoreData() {
+      fetch(`/getdata?offset=${offset}&limit=${limit}`)
+      .then(response => response.json())
+      .then(data => {
+        let tableBody = document.getElementById("tableBody");
+        if (data.length > 0) {
+          data.forEach(item => {
+            let row = `<tr>
+              <td>${item.name}</td>
+              <td>${item.kelas}</td>
+              <td>${item.uid}</td>
+              <td>${item.status == "0" ? "Belum Pinjam" : "Sedang Pinjam"}</td>
+              <td>
+                <button onclick="editData('${item.name}', '${item.kelas}')">✏️ Edit</button>
+                <button onclick="deleteData('${item.name}')">🗑 Hapus</button>
+              </td>
+            </tr>`;
+            tableBody.innerHTML += row;
+          });
+          offset += limit;
+        } else {
+          document.getElementById("loadMoreBtn").style.display = "none";
+        }
+      })
+      .catch(error => console.error("Error:", error));
+    }
+
+    function scanRFID() {
+      fetch("/scanrfid")
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById("uid").value = data;
+      })
+      .catch(error => console.error("Error:", error));
+    }
+
+    function editData(name, kelas) {
+      const newUID = prompt("Masukkan UID baru untuk " + name + " (" + kelas + ")");
+      if (newUID) {
+        const newKelas = prompt("Masukkan Kelas baru untuk " + name, kelas) || kelas;
+
+        const formData = new URLSearchParams();
+        formData.append("name", name);
+        formData.append("kelas", newKelas);
+        formData.append("uid", newUID);
+
+        fetch("/edit", {
+          method: "POST",
+          body: formData,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        })
+        .then(response => response.text())
+        .then(data => {
+          console.log(data);
+          offset = 0;
+          document.getElementById("tableBody").innerHTML = "";
+          loadMoreData();
+        })
+        .catch(error => console.error("Error:", error));
+      }
+    }
+
+    function deleteData(name) {
+      if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+        const formData = new URLSearchParams();
+        formData.append("name", name);
+
+        fetch("/delete", {
+          method: "POST",
+          body: formData,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" }
+        })
+        .then(response => response.text())
+        .then(data => {
+          console.log(data);
+          offset = 0;
+          document.getElementById("tableBody").innerHTML = "";
+          loadMoreData();
+        })
+        .catch(error => console.error("Error:", error));
+      }
+    }
+function resetWiFi() {
+  if (confirm("Apakah Anda yakin ingin mereset WiFi?")) {
+    fetch("/resetwifi")
+    .then(response => response.text())
+    .then(data => {
+      alert("ESP32 akan restart dan reset WiFi!\n" + data);
+    })
+    .catch(error => console.error("Error:", error));
+  }
+}
+
+
+    // Load pertama kali
+    loadMoreData();
+  </script>
+</body>
+</html>
